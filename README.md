@@ -66,5 +66,36 @@ El pipeline sigue las etapas clásicas:
 
 ---
 
-## 📁 Estructura del Repositorio
+---
 
+## ⚙️ Instalación
+
+### 1️⃣ Crear entorno virtual
+Python 3.11+
+
+```bash
+python -m venv venv
+venv\Scripts\activate       # Windows activate entorno virtual 
+
+2️⃣ Instalar dependencias
+
+pip install -r requirements.txt
+
+3️⃣ Crear archivo .env
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=sube_dw
+DB_USER=postgres
+DB_PASSWORD=tu_password
+
+🗄 Preparar la base de datos
+
+Entrar a PostgreSQL:
+
+CREATE DATABASE sube_dw;
+\c sube_dw;
+CREATE EXTENSION postgis;
+
+▶️ Ejecutar el ETL (etapa RAW)
+python main.py
