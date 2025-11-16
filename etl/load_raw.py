@@ -9,7 +9,7 @@ def load_puntos_carga_raw():
     """
     engine = get_engine()
 
-    file_path = os.path.join(DATA_RAW_DIR, "sube_red_de_carga_activa_2019-10-01.geojson")
+    file_path = os.path.join(DATA_RAW, "sube_red_de_carga_activa_2019-10-01.geojson")
 
     gdf = load_geojson(file_path)  # gdf con CRS EPSG:4326
 
@@ -29,6 +29,32 @@ def load_puntos_carga_raw():
     )
 
     print("Carga completa: raw_sube_puntos_carga")
+def load_terminales_autoservicio():
+    """
+    Carga el GeoJSON de puntos de carga SUBE a una tabla raw en PostGIS.
+    """
+    engine = get_engine()
+
+    file_path = os.path.join(DATA_RAW, "sube_terminales_autoservicio_activas_2019-10-01.geojson")
+
+    gdf = load_geojson(file_path)  # gdf con CRS EPSG:4326
+
+    # Renombrar columnas a snake_case si querés (ejemplo)
+    gdf.rename(
+        columns=lambda c: c.strip().lower().replace(" ", "_"),
+        inplace=True,
+    )
+
+    # Guardar en PostGIS
+    gdf.to_postgis(
+        "raw_sube_terminales_autoservicio",
+        engine,
+        if_exists="replace",
+        index=False,
+        dtype={"geometry": Geometry("POINT", srid=4326)},
+    )
+
+    print("Carga completa: raw_sube_terminales_autoservicio")
 
 import os
 import pandas as pd
@@ -49,3 +75,18 @@ def load_transacciones_raw():
     )
 
     print("Tabla cargada: raw_sube_transacciones")
+def load_total_usuarios_amba_raw():
+    engine = get_engine()
+    file_path = os.path.join(DATA_RAW, "total-usuarios-por-dia-AMBA.csv")
+
+    df = pd.read_csv(file_path)
+    print("Columnas CSV:", list(df.columns))
+
+    df.to_sql(
+        "raw_total-usuarios-por-dia-AMBA",
+        con=engine,
+        index=False,
+        if_exists="replace"
+    )
+
+    print("Tabla cargada: total-usuarios-por-dia-AMBA")
