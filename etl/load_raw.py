@@ -83,7 +83,7 @@ def load_total_usuarios_amba_raw():
     print("Columnas CSV:", list(df.columns))
 
     df.to_sql(
-        "raw_total-usuarios-por-dia-AMBA",
+        "raw_total_usuarios_por_dia_AMBA",
         con=engine,
         index=False,
         if_exists="replace"
