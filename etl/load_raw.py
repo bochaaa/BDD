@@ -61,20 +61,49 @@ import pandas as pd
 from .config import DATA_RAW, get_engine
 
 def load_transacciones_raw():
+    """
+    Carga todos los CSV de transacciones SUBE por año:
+    sube_transacciones_2020.csv ... sube_transacciones_2024.csv
+
+    Se concatenan y se guardan en raw_sube_transacciones.
+    """
     engine = get_engine()
-    file_path = os.path.join(DATA_RAW, "sube_transacciones.csv")
 
-    df = pd.read_csv(file_path)
-    print("Columnas CSV:", list(df.columns))
+    years = [2020, 2021, 2022, 2023, 2024,2025]
 
-    df.to_sql(
+    dfs = []
+    for y in years:
+        filename = f"sube_transacciones_{y}.csv"
+        file_path = os.path.join(DATA_RAW, filename)
+
+        if os.path.exists(file_path):
+            print(f"→ Cargando {filename} ...")
+            df = pd.read_csv(file_path)
+
+            # Registrar año de origen
+            df["anio"] = y
+
+            dfs.append(df)
+        else:
+            print(f"⚠ Archivo no encontrado: {filename}")
+
+    if not dfs:
+        print("❌ No se encontraron archivos de transacciones.")
+        return
+
+    # Unificar
+    df_full = pd.concat(dfs, ignore_index=True)
+    print("Columnas finales:", list(df_full.columns))
+    print(f"Total de filas cargadas: {len(df_full)}")
+
+    df_full.to_sql(
         "raw_sube_transacciones",
         con=engine,
         index=False,
         if_exists="replace"
     )
 
-    print("Tabla cargada: raw_sube_transacciones")
+    print("✅ Tabla cargada: raw_sube_transacciones")
 def load_total_usuarios_amba_raw():
     engine = get_engine()
     file_path = os.path.join(DATA_RAW, "total-usuarios-por-dia-AMBA.csv")

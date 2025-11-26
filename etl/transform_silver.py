@@ -112,27 +112,41 @@ def build_silver_transacciones():
     engine = get_engine()
 
     df = pd.read_sql_table("raw_sube_transacciones", con=engine)
-    print("[transacciones] Columnas RAW:", list(df.columns))
+   
 
-    # 1) Nulos
-    df = _drop_nulls(df, "transacciones")
+    
 
     # 2) Formato de fecha
-    # Suponemos columna tipo DIA_TRANSPORTE
+    # 
     date_candidates = [c for c in df.columns if "dia" in c.lower() or "fecha" in c.lower() or "date" in c.lower()]
     date_col = date_candidates[0] if date_candidates else df.columns[0]
     df = _ensure_date_col(df, date_col, "transacciones")
 
     # 3) Eliminar columnas no necesarias
-    drop_targets = {"linea", "nombre_empresa", "provincia", "jurisdiccion", "municipio", "dato_preliminar"}
+    drop_targets = {"linea", "nombre_empresa",  "jurisdiccion", "municipio", "dato_preliminar"}
     cols_to_drop = [c for c in df.columns if c.lower() in drop_targets]
     print(f"[transacciones] Columnas a eliminar: {cols_to_drop}")
     df = df.drop(columns=cols_to_drop, errors="ignore")
 
+    #3.2) eliminar lanchas y circular
+    tipos_excluir = ["Lanchas", "Circular"]
+
+
+    df = df[~df["TIPO_TRANSPORTE"].str.lower().isin([t.lower() for t in tipos_excluir])]
+    
     # 4) Sin negativos en columnas numéricas
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
     df = _remove_negative_numeric(df, numeric_cols, "transacciones")
-
+    # 1) Nulos
+     # 3) Rellenar nulos en campos de texto con 'NI' (control de nulos)
+    fill_targets = ["provincia",]
+    for target in fill_targets:
+        for real_col in df.columns:
+            if real_col.lower() == target:
+                df[real_col] = df[real_col].fillna("NI")
+                print(f"[puntos_carga] Columna '{real_col}' – NULL rellenados con 'NI'")
+                break
+    ##df = _drop_nulls(df, "transacciones")
     # Guardar en tabla silver
     df.to_sql(
         "silver_sube_transacciones",
@@ -149,22 +163,21 @@ def build_silver_transacciones():
 def build_silver_puntos_carga():
     """
     Silver para puntos de carga:
-    - Se ignora la geometry cruda del GeoJSON (está mal escalada).
-    - Se reconstruye el POINT a partir de las columnas latitud / longitud (EPSG:4326).
-    - Se eliminan únicamente filas sin lat/long.
-    - Se completan barrio/comuna/partido/localidad NULL con 'NI'.
-    - Se eliminan columnas administrativas que no se usan.
+    - Se reconstruye geometry desde latitud / longitud (EPSG:4326).
+    - Se rellenan algunos campos textuales con 'NI' para controlar nulos.
+    - Se eliminan columnas: id_entidad, entidad, nrocuit, id_ubicacion, ubicacion,
+      facultad, direccion, numero, barrio, comuna, pais, partido, localidad y cp.
+    - La tabla silver no tiene valores NULL (después de las transformaciones).
     """
     engine = get_engine()
 
-    # Leemos la tabla RAW como DataFrame normal (sin usar geometry)
+    # Leemos tabla RAW sin usar geometry cruda
     df = pd.read_sql_table("raw_sube_puntos_carga", con=engine)
     print("[puntos_carga] Columnas RAW:", list(df.columns))
 
-    # 1) Detectar columnas de latitud / longitud (case-insensitive)
+    # 1) Detectar columnas de latitud / longitud
     lon_col = next((c for c in df.columns if "long" in c.lower()), None)
     lat_col = next((c for c in df.columns if "lat" in c.lower()), None)
-
     if lon_col is None or lat_col is None:
         raise ValueError("No se encontraron columnas de latitud/longitud en raw_sube_puntos_carga")
 
@@ -175,7 +188,7 @@ def build_silver_puntos_carga():
     df = df.dropna(subset=[lon_col, lat_col])
     print(f"[puntos_carga] Filas después de eliminar lat/long NULL: {len(df)} (antes {before})")
 
-    # 3) Completar campos administrativos faltantes con 'NI'
+    # 3) Rellenar nulos en campos de texto con 'NI' (control de nulos)
     fill_targets = ["barrio", "comuna", "partido", "localidad"]
     for target in fill_targets:
         for real_col in df.columns:
@@ -184,26 +197,35 @@ def build_silver_puntos_carga():
                 print(f"[puntos_carga] Columna '{real_col}' – NULL rellenados con 'NI'")
                 break
 
-    # 4) Eliminar columnas que no vas a usar (pero dejamos barrio/comuna/partido/localidad)
+    # 4) Eliminar columnas que no deben estar en Silver (incluye barrio/comuna/etc.)
     drop_targets = {
         "id_entidad", "entidad",
         "nrocuit", "nro_cuit",
-        "id_ubicacion", "ubicacion",
-        "facultad", "direccion", "numero",
-        "pais", "cp", "geometry"  # geometry vieja la tiramos
+        "id_ubicacion", "ubicaci�",
+        "facultad", "direcci�", "n�mero",
+        "barrio", "comuna", "pa�s",
+        "partido", "localidad", "cp",
+        "geometry",
     }
     cols_to_drop = [c for c in df.columns if c.lower() in drop_targets]
     print(f"[puntos_carga] Columnas a eliminar: {cols_to_drop}")
     df = df.drop(columns=cols_to_drop, errors="ignore")
 
-    # 5) Construir GeoDataFrame con geometry correcta desde lon/lat
+    # 5) Eliminar cualquier NULL restante en otras columnas
+    nulls_before = df.isna().sum().sum()
+    if nulls_before > 0:
+        print(f"[puntos_carga] Valores NULL restantes antes de dropna: {nulls_before}")
+    df = df.dropna()
+    print(f"[puntos_carga] Filas después de dropna final: {len(df)}")
+
+    # 6) Construir GeoDataFrame con geometry correcta
     gdf = gpd.GeoDataFrame(
         df,
         geometry=gpd.points_from_xy(df[lon_col], df[lat_col]),
         crs="EPSG:4326"
     )
 
-    # 6) Guardar en tabla silver (POINT, 4326)
+    # 7) Guardar en tabla Silver
     gdf.to_postgis(
         "silver_sube_puntos_carga",
         engine,
@@ -217,11 +239,11 @@ def build_silver_puntos_carga():
 def build_silver_terminales_autoservicio():
     """
     Silver para terminales automáticas (TAS):
-    - Se ignora la geometry cruda del GeoJSON.
-    - Se reconstruye el POINT a partir de las columnas latitud / longitud (EPSG:4326).
-    - Se eliminan únicamente filas sin lat/long.
-    - Se completan barrio/comuna/partido/localidad NULL con 'NI'.
-    - Se eliminan columnas administrativas que no se usan.
+    - Se reconstruye geometry desde latitud / longitud (EPSG:4326).
+    - Se rellenan algunos campos textuales con 'NI' para controlar nulos.
+    - Se eliminan columnas: id_entidad, entidad, nrocuit, id_ubicacion, ubicacion,
+      facultad, direccion, numero, barrio, comuna, pais, partido, localidad y cp.
+    - La tabla silver no tiene valores NULL (después de las transformaciones).
     """
     engine = get_engine()
 
@@ -231,7 +253,6 @@ def build_silver_terminales_autoservicio():
     # 1) Detectar columnas lat / long
     lon_col = next((c for c in df.columns if "long" in c.lower()), None)
     lat_col = next((c for c in df.columns if "lat" in c.lower()), None)
-
     if lon_col is None or lat_col is None:
         raise ValueError("No se encontraron columnas de latitud/longitud en raw_sube_terminales_autoservicio")
 
@@ -241,7 +262,7 @@ def build_silver_terminales_autoservicio():
     df = df.dropna(subset=[lon_col, lat_col])
     print(f"[terminales] Filas después de eliminar lat/long NULL: {len(df)} (antes {before})")
 
-    # 2) Completar campos administrativos faltantes con 'NI'
+    # 2) Rellenar nulos en campos de texto con 'NI'
     fill_targets = ["barrio", "comuna", "partido", "localidad"]
     for target in fill_targets:
         for real_col in df.columns:
@@ -250,26 +271,35 @@ def build_silver_terminales_autoservicio():
                 print(f"[terminales] Columna '{real_col}' – NULL rellenados con 'NI'")
                 break
 
-    # 3) Eliminar columnas no usadas
+    # 3) Eliminar columnas que no deben estar en Silver
     drop_targets = {
         "id_entidad", "entidad",
         "nrocuit", "nro_cuit",
-        "id_ubicacion", "ubicacion",
-        "facultad", "direccion", "numero",
-        "pais", "cp", "geometry"
+        "id_ubicacion", "ubicaci�",
+        "facultad", "direcci�", "n�mero",
+        "barrio", "comuna", "pa�s",
+        "partido", "localidad", "cp",
+        "geometry",
     }
     cols_to_drop = [c for c in df.columns if c.lower() in drop_targets]
     print(f"[terminales] Columnas a eliminar: {cols_to_drop}")
     df = df.drop(columns=cols_to_drop, errors="ignore")
 
-    # 4) Construir geometry correcta desde lon/lat
+    # 4) Eliminar NULL restantes
+    nulls_before = df.isna().sum().sum()
+    if nulls_before > 0:
+        print(f"[terminales] Valores NULL restantes antes de dropna: {nulls_before}")
+    df = df.dropna()
+    print(f"[terminales] Filas después de dropna final: {len(df)}")
+
+    # 5) Construir GeoDataFrame con geometry correcta
     gdf = gpd.GeoDataFrame(
         df,
         geometry=gpd.points_from_xy(df[lon_col], df[lat_col]),
         crs="EPSG:4326"
     )
 
-    # 5) Guardar en silver
+    # 6) Guardar en tabla Silver
     gdf.to_postgis(
         "silver_sube_terminales_autoservicio",
         engine,
