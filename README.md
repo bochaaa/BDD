@@ -3,7 +3,7 @@
 Este repositorio contiene el proceso ETL (Extract–Transform–Load) para los conjuntos de datos públicos del sistema SUBE en Argentina.  
 El objetivo es extraer los datasets originales (CSV y GeoJSON), limpiarlos, estandarizarlos y cargarlos en una base de datos PostgreSQL con PostGIS para análisis posteriores.
 
-## 🚀 Objetivo del Proyecto
+##  Objetivo del Proyecto
 - Construir un pipeline ETL reproducible y ordenado.
 - Integrar datos geográficos (puntos SUBE) usando GeoPandas + PostGIS.
 - Centralizar los datos en un Data Warehouse propio.
@@ -12,7 +12,7 @@ El objetivo es extraer los datasets originales (CSV y GeoJSON), limpiarlos, esta
 
 ---
 
-## 📦 Datasets Utilizados
+##  Datasets Utilizados
 
 ### 1. **SUBE – Transacciones por fecha**
 - Cantidad de validaciones (usos) de la tarjeta SUBE.
@@ -30,22 +30,22 @@ El objetivo es extraer los datasets originales (CSV y GeoJSON), limpiarlos, esta
 
 ---
 
-## 🧱 Arquitectura ETL
+##  Arquitectura ETL
 
 El pipeline sigue las etapas clásicas:
 
-### **🟫 Bronze (RAW)**
+### ** Bronze (RAW)**
 - Los archivos originales se almacenan sin modificaciones en `data/raw/`.
 - Se cargan a PostgreSQL tal como vienen.
 
-### **⬜ Silver (Limpieza & Normalización)**
+### ** Silver (Limpieza & Normalización)**
 - Correcciones de coordenadas geográficas.
 - Estandarización de nombres y campos.
 - Normalización de ubicaciones: provincia, municipio, AMBA.
 - Eliminación de duplicados.
 - Validación de tipos y rangos.
 
-### **🟨 Gold (Métricas/KPIs)**
+### ** Gold (Métricas/KPIs)**
 - Tablas resumidas.
 - Usuarios vs viajes.
 - Transacciones por medio y ubicación.
@@ -55,7 +55,7 @@ El pipeline sigue las etapas clásicas:
 
 ---
 
-## 🛠 Tecnologías Utilizadas
+##  Tecnologías Utilizadas
 - **Python 3.11+**
 - **pandas**
 - **geopandas**
@@ -68,20 +68,20 @@ El pipeline sigue las etapas clásicas:
 
 ---
 
-## ⚙️ Instalación
+## Instalación
 
-### 1️⃣ Crear entorno virtual
+### 1 Crear entorno virtual
 Python 3.11+
 
 ```bash
 python -m venv venv
 venv\Scripts\activate       # Windows activate entorno virtual 
 
-2️⃣ Instalar dependencias
+2️ Instalar dependencias
 
 pip install -r requirements.txt
 
-3️⃣ Crear archivo .env
+3️ Crear archivo .env
 
 DB_HOST=localhost
 DB_PORT=5432
@@ -89,7 +89,7 @@ DB_NAME=sube_dw
 DB_USER=postgres
 DB_PASSWORD=tu_password
 
-🗄 Preparar la base de datos
+ Preparar la base de datos
 
 Entrar a PostgreSQL:
 
@@ -97,5 +97,5 @@ CREATE DATABASE sube_dw;
 \c sube_dw;
 CREATE EXTENSION postgis;
 
-▶️ Ejecutar el ETL (etapa RAW)
+ -> Ejecutar el ETL (etapa RAW)
 python main.py
